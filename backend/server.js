@@ -1,3 +1,9 @@
+
+import dns from 'node:dns';
+
+// Configure DNS for MongoDB Atlas SRV lookup
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
@@ -94,8 +100,10 @@ io.use((socket, next) => {
 
     const secret =
       process.env.JWT_SECRET || 'skillswap_dev_secret_key_change_in_production_2025';
+
     const decoded = jwt.verify(token, secret);
     socket.userId = decoded.id;
+
     next();
   } catch (err) {
     return next(new Error('Authentication failed: ' + err.message));
@@ -105,15 +113,16 @@ io.use((socket, next) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Socket connected: ${socket.id} (User: ${socket.userId})`);
 
-  // User joins their personal room for direct notifications
+  // Join personal room
   socket.join(`user_${socket.userId}`);
 
-  // Join a conversation room (only if user is a participant of the accepted request)
+  // Join accepted exchange conversation
   socket.on('joinRoom', async ({ requestId }) => {
     try {
       if (!requestId) return;
 
       const request = await Request.findById(requestId);
+
       if (!request || request.status !== 'accepted') {
         socket.emit('error', {
           message: 'Cannot join room: Request must be accepted.',
@@ -134,15 +143,17 @@ io.on('connection', (socket) => {
 
       const roomName = `room_${requestId}`;
       socket.join(roomName);
+
       console.log(`👤 User ${socket.userId} joined room ${roomName}`);
       socket.emit('joinedRoom', { requestId, room: roomName });
+
     } catch (err) {
       console.error('Error joining socket room:', err);
       socket.emit('error', { message: 'Failed to join room' });
     }
   });
 
-  // Leave a conversation room
+  // Leave conversation room
   socket.on('leaveRoom', ({ requestId }) => {
     if (requestId) {
       const roomName = `room_${requestId}`;
@@ -151,12 +162,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Send a real-time message
+  // Send real-time message
   socket.on('sendMessage', async ({ requestId, text }) => {
     try {
       if (!requestId || !text || !text.trim()) return;
 
       const request = await Request.findById(requestId);
+
       if (!request || request.status !== 'accepted') {
         socket.emit('error', {
           message: 'Messages can only be sent for accepted skill exchanges.',
@@ -176,7 +188,6 @@ io.on('connection', (socket) => {
 
       const receiverId = isSender ? request.receiverId : request.senderId;
 
-      // Create and persist message in MongoDB Atlas
       const newMessage = await Message.create({
         requestId,
         senderId: socket.userId,
@@ -191,10 +202,8 @@ io.on('connection', (socket) => {
 
       const roomName = `room_${requestId}`;
 
-      // Broadcast to all participants in this conversation room
       io.to(roomName).emit('receiveMessage', populatedMessage);
 
-      // Also notify the receiver's personal room so their conversations list updates
       io.to(`user_${receiverId}`).emit('conversationUpdated', {
         requestId,
         lastMessage: {
@@ -203,6 +212,7 @@ io.on('connection', (socket) => {
           createdAt: populatedMessage.createdAt,
         },
       });
+
     } catch (err) {
       console.error('Error sending socket message:', err);
       socket.emit('error', { message: 'Failed to send message' });
@@ -221,7 +231,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Mark messages as read in real-time
+  // Mark messages as read
   socket.on('markAsRead', async ({ requestId }) => {
     try {
       if (!requestId) return;
@@ -235,13 +245,13 @@ io.on('connection', (socket) => {
         { $set: { read: true } }
       );
 
-      // Notify the sender that messages were read
       socket.to(`room_${requestId}`).emit('messagesRead', {
         requestId,
         readBy: socket.userId,
       });
+
     } catch (err) {
-      console.error('Error marking messages as read via socket:', err);
+      console.error('Error marking messages as read:', err);
     }
   });
 
@@ -250,18 +260,21 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
+// Start server only after MongoDB connects
 const startServer = async () => {
   try {
     await connectDB();
 
     const PORT = process.env.PORT || 5000;
+
     server.listen(PORT, () => {
       console.log(`🚀 SkillSwap Server running on port ${PORT} (with Socket.IO)`);
       console.log(`📡 API Base URL: http://localhost:${PORT}/api`);
     });
+
   } catch (error) {
-    console.error('Server startup failed:', error.message);
+    console.error('❌ Server startup failed:', error.message);
+    process.exit(1);
   }
 };
 
