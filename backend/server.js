@@ -57,7 +57,17 @@ app.get('/', (req, res) => {
       skills: '/api/skills (search, user, explore, create, update, delete)',
       requests: '/api/requests (sent, received, send, accept, reject, cancel)',
       chat: '/api/chat (conversations, messages)',
+      health: '/api/health',
     },
+  });
+});
+
+// Health check endpoint for cloud uptime monitors (Render, Railway, etc.)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
   });
 });
 

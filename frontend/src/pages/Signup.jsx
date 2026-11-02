@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { UserPlus, ArrowRight, AlertCircle } from 'lucide-react';
-import { authService } from '../services/api';
+import { authService, getErrorMessage } from '../services/api';
 import '../styles/Auth.css';
 
 function Signup({ onSignup }) {
@@ -105,9 +105,10 @@ function Signup({ onSignup }) {
       navigate('/dashboard');
     } catch (err) {
       console.error('Registration Error:', err);
-      const message =
-        err.response?.data?.message ||
-        'Failed to register. Please check your network and backend server.';
+      const message = getErrorMessage(
+        err,
+        'Failed to register. Please check your network and backend server.'
+      );
       setServerError(message);
     } finally {
       setIsSubmitting(false);

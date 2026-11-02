@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { LogIn, ArrowRight, AlertCircle } from 'lucide-react';
-import { authService } from '../services/api';
+import { authService, getErrorMessage } from '../services/api';
 import '../styles/Auth.css';
 
 function Login({ onLogin }) {
@@ -78,9 +78,10 @@ function Login({ onLogin }) {
       navigate('/dashboard');
     } catch (err) {
       console.error('Login Error:', err);
-      const message =
-        err.response?.data?.message ||
-        'Unable to connect to server. Please check your backend is running on port 5000.';
+      const message = getErrorMessage(
+        err,
+        'Unable to connect to server. Please check your backend is running.'
+      );
       setServerError(message);
     } finally {
       setIsSubmitting(false);

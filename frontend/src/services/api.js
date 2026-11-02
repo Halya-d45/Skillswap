@@ -2,11 +2,40 @@ import axios from 'axios';
 import { disconnectSocket } from './socket';
 
 // Base URL for the Express backend API
-// Configured from environment variable VITE_API_URL
-const API_BASE_URL =
+// Configured from environment variable VITE_API_URL or fallback to localhost
+const rawApiUrl =
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
   'http://localhost:5000/api';
+
+// Normalize URL: trim whitespace, strip trailing slashes, ensure it ends with /api
+const cleanApiUrl = rawApiUrl.trim().replace(/\/+$/, '');
+export const API_BASE_URL = cleanApiUrl.endsWith('/api')
+  ? cleanApiUrl
+  : `${cleanApiUrl}/api`;
+
+/**
+ * Helper to produce friendly, diagnostic error messages
+ */
+export const getErrorMessage = (err, fallback = 'Something went wrong. Please check your connection and try again.') => {
+  if (err?.response?.data?.message) {
+    return err.response.data.message;
+  }
+
+  const isHosted =
+    typeof window !== 'undefined' &&
+    !['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+  if (isHosted && API_BASE_URL.includes('localhost')) {
+    return 'Backend URL is not configured on Vercel! Please add VITE_API_URL in your Vercel Project Settings pointing to your deployed backend URL.';
+  }
+
+  if (!err?.response) {
+    return 'Cannot reach the backend server. If using a free host like Render, it may take 30-50s to wake up from sleep. Please check your backend status.';
+  }
+
+  return fallback;
+};
 
 // Create an Axios instance
 const api = axios.create({
@@ -14,7 +43,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 10000,
+  timeout: 15000,
 });
 
 // Request Interceptor: Automatically attach JWT Bearer token from localStorage

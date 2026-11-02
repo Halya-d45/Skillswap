@@ -1,13 +1,14 @@
 import { io } from 'socket.io-client';
 
 // Determine Socket.IO backend URL from environment or default
-const API_URL =
+const rawUrl = (
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  'http://localhost:5000/api';
+  'http://localhost:5000/api'
+).trim().replace(/\/+$/, '');
 
 // Strip /api if present to get the root server URL
-const SOCKET_SERVER_URL = API_URL.replace(/\/api\/?$/, '');
+const SOCKET_SERVER_URL = rawUrl.replace(/\/api\/?$/, '');
 
 let socket = null;
 
