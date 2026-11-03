@@ -15,16 +15,6 @@ function Login({ onLogin }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  // Quick fill button for testing
-  const handleFillDemo = () => {
-    setFormData({
-      email: 'sarah.chen@example.com',
-      password: 'password123',
-    });
-    setErrors({});
-    setServerError('');
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -104,7 +94,15 @@ function Login({ onLogin }) {
 
         {/* Server Error Alert */}
         {serverError && (
-          <div className="alert-banner alert-banner-error" style={{ backgroundColor: '#fee2e2', color: '#b91c1c', border: '1px solid #f87171' }}>
+          <div
+            className="alert-banner alert-banner-error"
+            style={{
+              backgroundColor: '#fee2e2',
+              color: '#b91c1c',
+              border: '1px solid #f87171',
+              marginBottom: '18px',
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <AlertCircle size={18} />
               <span>{serverError}</span>
@@ -112,22 +110,8 @@ function Login({ onLogin }) {
           </div>
         )}
 
-        {/* Quick Demo Credentials Assistant */}
-        <div className="demo-credentials-box">
-          <div className="demo-credentials-text">
-            <strong>Testing?</strong> Fill demo credentials with 1 click
-          </div>
-          <button
-            type="button"
-            className="btn-fill-demo"
-            onClick={handleFillDemo}
-          >
-            Auto Fill
-          </button>
-        </div>
-
         {/* Login Form */}
-        <form className="auth-form" onSubmit={handleSubmit} style={{ marginTop: '16px' }}>
+        <form className="auth-form" onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label" htmlFor="email">
               <span>Email Address</span>
