@@ -10,12 +10,15 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  Camera,
 } from 'lucide-react';
 import { authService } from '../services/api';
+import AvatarPickerModal from '../components/AvatarPickerModal';
 import '../styles/Profile.css';
 
 function Profile({ currentUser, onUpdateUser }) {
   const [isEditing, setIsEditing] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -118,6 +121,26 @@ function Profile({ currentUser, onUpdateUser }) {
     setErrorMessage('');
   };
 
+  const handleSaveAvatar = async (newAvatarUrl) => {
+    try {
+      if (localStorage.getItem('token')) {
+        const updated = await authService.updateProfile({ profileImage: newAvatarUrl });
+        onUpdateUser(updated);
+      } else {
+        onUpdateUser({
+          ...currentUser,
+          profileImage: newAvatarUrl,
+          avatar: newAvatarUrl,
+        });
+      }
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 4500);
+    } catch (err) {
+      console.error('Save avatar error:', err);
+      throw new Error(err.response?.data?.message || 'Failed to update avatar image');
+    }
+  };
+
   const avatarUrl =
     currentUser?.profileImage ||
     currentUser?.avatar ||
@@ -174,15 +197,32 @@ function Profile({ currentUser, onUpdateUser }) {
             <div className="profile-hero-card">
               <div className="profile-top-row">
                 <div className="profile-identity">
-                  <img
-                    src={avatarUrl}
-                    alt={currentUser?.name || 'Profile'}
-                    className="profile-avatar-large"
-                    onError={(e) => {
-                      e.target.src =
-                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200';
-                    }}
-                  />
+                  <div
+                    className="profile-avatar-wrapper"
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    title="Click to change profile picture or icon"
+                  >
+                    <img
+                      src={avatarUrl}
+                      alt={currentUser?.name || 'Profile'}
+                      className="profile-avatar-large"
+                      onError={(e) => {
+                        e.target.src =
+                          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200';
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="profile-avatar-edit-badge"
+                      title="Change picture or icon"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsAvatarModalOpen(true);
+                      }}
+                    >
+                      <Camera size={16} />
+                    </button>
+                  </div>
                   <div>
                     <h1 className="profile-name">
                       {currentUser?.name || 'SkillSwap Member'}
@@ -208,14 +248,23 @@ function Profile({ currentUser, onUpdateUser }) {
                   </div>
                 </div>
 
-                {/* Edit Profile Button */}
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={handleStartEditing}
-                >
-                  <Edit3 size={16} /> Edit Profile
-                </button>
+                {/* Profile Actions */}
+                <div className="profile-actions-row">
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setIsAvatarModalOpen(true)}
+                  >
+                    <Camera size={16} /> Change Avatar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={handleStartEditing}
+                  >
+                    <Edit3 size={16} /> Edit Profile
+                  </button>
+                </div>
               </div>
 
               {/* Bio */}
@@ -298,6 +347,46 @@ function Profile({ currentUser, onUpdateUser }) {
             </div>
 
             <form onSubmit={handleSaveProfile}>
+              {/* Avatar Selector in Edit Mode */}
+              <div className="profile-edit-avatar-section">
+                <div
+                  className="profile-avatar-wrapper"
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  title="Click to choose a photo or icon"
+                >
+                  <img
+                    src={avatarUrl}
+                    alt={currentUser?.name || 'Profile'}
+                    className="profile-avatar-large"
+                    onError={(e) => {
+                      e.target.src =
+                        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200';
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="profile-avatar-edit-badge"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAvatarModalOpen(true);
+                    }}
+                  >
+                    <Camera size={16} />
+                  </button>
+                </div>
+                <div className="profile-edit-avatar-text">
+                  <h4>Profile Picture & Icon</h4>
+                  <p>Choose an avatar icon, character, or upload your own photo.</p>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    onClick={() => setIsAvatarModalOpen(true)}
+                  >
+                    <Camera size={15} /> Change Picture / Icon
+                  </button>
+                </div>
+              </div>
+
               <div className="edit-form-grid">
                 <div className="form-group">
                   <label className="form-label" htmlFor="name">
@@ -401,6 +490,14 @@ function Profile({ currentUser, onUpdateUser }) {
             </form>
           </div>
         )}
+        {/* Avatar Picker Modal */}
+        <AvatarPickerModal
+          isOpen={isAvatarModalOpen}
+          onClose={() => setIsAvatarModalOpen(false)}
+          currentAvatar={avatarUrl}
+          onSaveAvatar={handleSaveAvatar}
+          userName={currentUser?.name || 'Member'}
+        />
       </div>
     </div>
   );

@@ -33,6 +33,18 @@
   gap: 24px;
 }
 
+.profile-avatar-wrapper {
+  position: relative;
+  display: inline-block;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.profile-avatar-wrapper:hover .profile-avatar-large {
+  opacity: 0.92;
+  border-color: var(--primary-purple);
+}
+
 .profile-avatar-large {
   width: 96px;
   height: 96px;
@@ -40,6 +52,61 @@
   object-fit: cover;
   border: 3px solid var(--primary-purple-light);
   box-shadow: var(--shadow-md);
+  transition: var(--transition);
+}
+
+.profile-avatar-edit-badge {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--primary-purple);
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.profile-avatar-wrapper:hover .profile-avatar-edit-badge {
+  transform: scale(1.1);
+  background: #6d28d9;
+}
+
+.profile-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.profile-edit-avatar-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 20px;
+  background: var(--bg-main);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+}
+
+.profile-edit-avatar-text h4 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin-bottom: 4px;
+}
+
+.profile-edit-avatar-text p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 10px;
 }
 
 .profile-name {
