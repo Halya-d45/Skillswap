@@ -4,12 +4,12 @@ import {
   Sparkles,
   ArrowRight,
   Compass,
-  ArrowLeftRight,
   BookOpen,
   Users,
   TrendingUp,
 } from 'lucide-react';
 import SkillCard from '../components/SkillCard';
+import SkillSwapIllustration from '../components/SkillSwapIllustration';
 import { skillService } from '../services/api';
 import { initialSkillsList } from '../data/mockData';
 import '../styles/Home.css';
@@ -94,49 +94,9 @@ function Home({ currentUser }) {
             </div>
           </div>
 
-          {/* Hero Visual Preview Card */}
+          {/* Hero Visual: Animated SkillSwap Concept Illustration */}
           <div className="hero-visual">
-            <div className="hero-card-stack">
-              <div className="hero-floating-card">
-                <div className="swap-preview-header">
-                  <span className="swap-preview-title">Live Skill Exchange</span>
-                  <span className="badge badge-purple">Mutual Match</span>
-                </div>
-
-                <div className="swap-nodes-container">
-                  {/* Person 1 */}
-                  <div className="swap-node">
-                    <img
-                      src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200"
-                      alt="Alex"
-                      className="swap-node-avatar"
-                    />
-                    <div className="swap-node-info">
-                      <div className="swap-node-name">Alex Morgan</div>
-                      <div className="swap-node-skill">Teaches: Python & Django</div>
-                    </div>
-                  </div>
-
-                  {/* Swap Indicator */}
-                  <div className="swap-icon-divider">
-                    <ArrowLeftRight size={22} />
-                  </div>
-
-                  {/* Person 2 */}
-                  <div className="swap-node">
-                    <img
-                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200"
-                      alt="Sarah"
-                      className="swap-node-avatar"
-                    />
-                    <div className="swap-node-info">
-                      <div className="swap-node-name">Sarah Chen</div>
-                      <div className="swap-node-skill">Teaches: UI/UX & Figma</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <SkillSwapIllustration />
           </div>
         </div>
       </section>

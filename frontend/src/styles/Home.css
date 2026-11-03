@@ -11,9 +11,9 @@
 
 .hero-grid {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr;
+  grid-template-columns: 1.05fr 0.95fr;
   align-items: center;
-  gap: 48px;
+  gap: 36px;
 }
 
 .hero-badge {
@@ -60,88 +60,13 @@
   flex-wrap: wrap;
 }
 
-/* Hero Visual / Cards Preview */
+/* Hero Visual / Animated Illustration */
 .hero-visual {
   position: relative;
   display: flex;
   justify-content: center;
-}
-
-.hero-card-stack {
-  position: relative;
+  align-items: center;
   width: 100%;
-  max-width: 420px;
-}
-
-.hero-floating-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-xl);
-  padding: 24px;
-  box-shadow: 0 20px 30px -10px rgba(37, 99, 235, 0.15), 0 10px 15px -5px rgba(124, 58, 237, 0.08);
-  position: relative;
-  z-index: 2;
-}
-
-.swap-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 18px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.swap-preview-title {
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--text-heading);
-}
-
-.swap-nodes-container {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.swap-node {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background-color: var(--bg-muted);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border-color);
-}
-
-.swap-node-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-full);
-  object-fit: cover;
-}
-
-.swap-node-info {
-  flex: 1;
-}
-
-.swap-node-name {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--text-heading);
-}
-
-.swap-node-skill {
-  font-size: 0.8rem;
-  color: var(--primary-blue);
-  font-weight: 600;
-}
-
-.swap-icon-divider {
-  display: flex;
-  justify-content: center;
-  color: var(--primary-purple);
-  margin: -6px 0;
 }
 
 /* Stats Section */
