@@ -275,12 +275,29 @@ const startServer = async () => {
   try {
     await connectDB();
 
-    const PORT = process.env.PORT || 5000;
+    let PORT = Number(process.env.PORT) || 5001;
 
-    server.listen(PORT, () => {
-      console.log(`🚀 SkillSwap Server running on port ${PORT} (with Socket.IO)`);
-      console.log(`📡 API Base URL: http://localhost:${PORT}/api`);
+    const listenOnPort = (portToTry) => {
+      server.listen(portToTry, () => {
+        console.log(`🚀 SkillSwap Server running on port ${portToTry} (with Socket.IO)`);
+        console.log(`📡 API Base URL: http://localhost:${portToTry}/api`);
+      });
+    };
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
+        console.warn(`⚠️ Port ${PORT} is in use or restricted on this machine. Falling back to port ${PORT + 1}...`);
+        PORT += 1;
+        setTimeout(() => {
+          listenOnPort(PORT);
+        }, 500);
+      } else {
+        console.error('❌ Server error:', err.message);
+        process.exit(1);
+      }
     });
+
+    listenOnPort(PORT);
 
   } catch (error) {
     console.error('❌ Server startup failed:', error.message);

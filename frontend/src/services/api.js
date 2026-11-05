@@ -6,7 +6,7 @@ import { disconnectSocket } from './socket';
 const rawApiUrl =
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_API_BASE_URL ||
-  'http://localhost:5000/api';
+  'http://localhost:5001/api';
 
 // Normalize URL: trim whitespace, strip trailing slashes, ensure it ends with /api
 const cleanApiUrl = rawApiUrl.trim().replace(/\/+$/, '');
