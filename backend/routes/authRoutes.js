@@ -1,6 +1,10 @@
 import express from 'express';
 import {
   registerUser,
+  verifyEmail,
+  resendVerificationOtp,
+  forgotPassword,
+  resetPassword,
   loginUser,
   getUserProfile,
   updateUserProfile,
@@ -12,6 +16,10 @@ const router = express.Router();
 
 // Public auth routes
 router.post('/register', registerUser);
+router.post('/verify-email', verifyEmail);
+router.post('/resend-verification-otp', resendVerificationOtp);
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 router.post('/login', loginUser);
 router.get('/users', getAllUsers);
 

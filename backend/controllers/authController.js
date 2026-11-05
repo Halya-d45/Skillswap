@@ -1,6 +1,11 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import {
+  sendVerificationEmail,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+} from '../config/email.js';
 
 /**
  * Helper to generate a signed JWT token
@@ -13,7 +18,14 @@ const generateToken = (id) => {
 };
 
 /**
- * @desc    Register a new user
+ * Helper to generate a random 6-digit OTP string
+ */
+const generateSixDigitOtp = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+/**
+ * @desc    Register a new user (generates & emails verification OTP)
  * @route   POST /api/auth/register
  * @access  Public
  */
@@ -38,13 +50,20 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'Please provide name, email, and password' });
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return res.status(400).json({ message: 'Please provide a valid email address' });
+    }
+
     if (password.length < 6) {
       return res.status(400).json({ message: 'Password must be at least 6 characters' });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check if user already exists
-    const userExists = await User.findOne({ email: email.toLowerCase().trim() });
-    if (userExists) {
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser && existingUser.isVerified) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
@@ -70,43 +89,360 @@ export const registerUser = async (req, res) => {
           .map((s) => s.trim())
           .filter(Boolean);
 
-    // Create user in MongoDB
-    const user = await User.create({
-      name: name.trim(),
-      email: email.toLowerCase().trim(),
-      password: hashedPassword,
-      skillsToTeach: normalizedTeach,
-      skillsToLearn: normalizedLearn,
-      bio: bio || 'Eager to exchange skills and learn with the SkillSwap community!',
-      profileImage:
-        profileImage ||
-        avatar ||
-        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-      location: location || 'Remote',
-    });
+    // Generate 6-digit OTP & hash it before storing
+    const otp = generateSixDigitOtp();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    if (user) {
-      return res.status(201).json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        bio: user.bio,
-        profileImage: user.profileImage,
-        avatar: user.profileImage,
-        location: user.location,
-        skillsToTeach: user.skillsToTeach,
-        skillsTeach: user.skillsToTeach,
-        skillsToLearn: user.skillsToLearn,
-        skillsLearn: user.skillsToLearn,
-        swapsCompleted: user.swapsCompleted,
-        token: generateToken(user._id),
-      });
+    let user;
+
+    if (existingUser && !existingUser.isVerified) {
+      // User registered previously but hadn't verified yet — update record & send fresh OTP
+      existingUser.name = name.trim();
+      existingUser.password = hashedPassword;
+      existingUser.skillsToTeach = normalizedTeach;
+      existingUser.skillsToLearn = normalizedLearn;
+      existingUser.bio = bio || existingUser.bio;
+      existingUser.profileImage = profileImage || avatar || existingUser.profileImage;
+      existingUser.location = location || existingUser.location;
+      existingUser.verificationOtp = hashedOtp;
+      existingUser.verificationOtpExpires = otpExpires;
+      existingUser.verificationAttempts = 0;
+      existingUser.otpLastSentAt = new Date();
+      user = await existingUser.save();
     } else {
-      return res.status(400).json({ message: 'Invalid user data received' });
+      // Create fresh unverified user in MongoDB
+      user = await User.create({
+        name: name.trim(),
+        email: normalizedEmail,
+        password: hashedPassword,
+        skillsToTeach: normalizedTeach,
+        skillsToLearn: normalizedLearn,
+        bio: bio || 'Eager to exchange skills and learn with the SkillSwap community!',
+        profileImage:
+          profileImage ||
+          avatar ||
+          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+        location: location || 'Remote',
+        isVerified: false,
+        verificationOtp: hashedOtp,
+        verificationOtpExpires: otpExpires,
+        verificationAttempts: 0,
+        otpLastSentAt: new Date(),
+      });
     }
+
+    // Send verification email via Nodemailer
+    try {
+      await sendVerificationEmail(user.email, user.name, otp);
+    } catch (mailErr) {
+      console.error('Failed to dispatch verification email:', mailErr.message);
+    }
+
+    // Respond WITHOUT JWT token (user must verify email first)
+    return res.status(201).json({
+      message: 'Registration initiated! Please check your email for the 6-digit verification code.',
+      email: user.email,
+      requiresVerification: true,
+    });
   } catch (error) {
     console.error('Registration Error:', error.message);
     return res.status(500).json({ message: 'Server error during registration', error: error.message });
+  }
+};
+
+/**
+ * @desc    Verify email using 6-digit OTP
+ * @route   POST /api/auth/verify-email
+ * @access  Public
+ */
+export const verifyEmail = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ message: 'Please provide both email and 6-digit OTP' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found with this email' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'This email is already verified. You can log in directly.' });
+    }
+
+    if (!user.verificationOtp || !user.verificationOtpExpires) {
+      return res.status(400).json({ message: 'No pending verification code found. Please request a new OTP.' });
+    }
+
+    // Check maximum attempts limit (max 5)
+    if (user.verificationAttempts >= 5) {
+      return res.status(400).json({
+        message: 'Too many incorrect attempts. For security, please request a new verification OTP.',
+      });
+    }
+
+    // Check expiration (5 minutes)
+    if (new Date() > new Date(user.verificationOtpExpires)) {
+      return res.status(400).json({
+        message: 'Verification code has expired. Please request a new OTP.',
+      });
+    }
+
+    // Verify OTP using bcrypt comparison
+    const isMatch = await bcrypt.compare(otp.trim(), user.verificationOtp);
+    if (!isMatch) {
+      user.verificationAttempts += 1;
+      await user.save();
+      const remainingAttempts = Math.max(0, 5 - user.verificationAttempts);
+      return res.status(400).json({
+        message: `Invalid verification code. ${remainingAttempts} attempt(s) remaining.`,
+      });
+    }
+
+    // Mark as verified & clear OTP fields
+    user.isVerified = true;
+    user.verificationOtp = null;
+    user.verificationOtpExpires = null;
+    user.verificationAttempts = 0;
+    user.otpLastSentAt = null;
+    await user.save();
+
+    // Send Welcome Email upon successful verification
+    try {
+      await sendWelcomeEmail(user.email, user.name);
+    } catch (mailErr) {
+      console.error('Welcome email delivery error:', mailErr.message);
+    }
+
+    // Now issue JWT token and return user data for login
+    return res.status(200).json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      bio: user.bio,
+      profileImage: user.profileImage,
+      avatar: user.profileImage,
+      location: user.location,
+      skillsToTeach: user.skillsToTeach,
+      skillsTeach: user.skillsToTeach,
+      skillsToLearn: user.skillsToLearn,
+      skillsLearn: user.skillsToLearn,
+      swapsCompleted: user.swapsCompleted,
+      isVerified: user.isVerified,
+      token: generateToken(user._id),
+      message: 'Email successfully verified! Welcome to SkillSwap.',
+    });
+  } catch (error) {
+    console.error('Email Verification Error:', error.message);
+    return res.status(500).json({ message: 'Server error during email verification', error: error.message });
+  }
+};
+
+/**
+ * @desc    Resend registration verification OTP with 60s cooldown
+ * @route   POST /api/auth/resend-verification-otp
+ * @access  Public
+ */
+export const resendVerificationOtp = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email address is required' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Account not found with this email' });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({ message: 'Account is already verified. Please log in directly.' });
+    }
+
+    // Check resend cooldown of 60 seconds
+    const now = Date.now();
+    if (user.otpLastSentAt) {
+      const elapsedMs = now - new Date(user.otpLastSentAt).getTime();
+      const cooldownMs = 60 * 1000;
+      if (elapsedMs < cooldownMs) {
+        const remainingSec = Math.ceil((cooldownMs - elapsedMs) / 1000);
+        return res.status(429).json({
+          message: `Please wait ${remainingSec} second(s) before requesting another code.`,
+          remainingSeconds: remainingSec,
+        });
+      }
+    }
+
+    // Generate new OTP & hash it
+    const otp = generateSixDigitOtp();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+
+    user.verificationOtp = hashedOtp;
+    user.verificationOtpExpires = new Date(now + 5 * 60 * 1000); // 5 mins
+    user.verificationAttempts = 0;
+    user.otpLastSentAt = new Date(now);
+    await user.save();
+
+    // Send email
+    try {
+      await sendVerificationEmail(user.email, user.name, otp);
+    } catch (mailErr) {
+      console.error('Failed to resend verification email:', mailErr.message);
+    }
+
+    return res.status(200).json({
+      message: 'A new 6-digit verification code has been sent to your email.',
+    });
+  } catch (error) {
+    console.error('Resend Verification OTP Error:', error.message);
+    return res.status(500).json({ message: 'Server error resending OTP', error: error.message });
+  }
+};
+
+/**
+ * @desc    Initiate forgot password flow (generates & emails reset OTP)
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Please provide your registered email' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    // Consistent response message to avoid account enumeration
+    const genericResponse = {
+      message: 'If an account exists with that email address and is verified, a password reset code has been sent.',
+    };
+
+    if (!user || user.isVerified === false) {
+      // Do not disclose whether email exists or is unverified
+      return res.status(200).json(genericResponse);
+    }
+
+    // Check 60-second cooldown on reset requests
+    const now = Date.now();
+    if (user.resetPasswordOtpLastSentAt) {
+      const elapsedMs = now - new Date(user.resetPasswordOtpLastSentAt).getTime();
+      const cooldownMs = 60 * 1000;
+      if (elapsedMs < cooldownMs) {
+        const remainingSec = Math.ceil((cooldownMs - elapsedMs) / 1000);
+        return res.status(429).json({
+          message: `Please wait ${remainingSec} second(s) before requesting another reset code.`,
+          remainingSeconds: remainingSec,
+        });
+      }
+    }
+
+    // Generate 6-digit OTP & hash it
+    const otp = generateSixDigitOtp();
+    const hashedOtp = await bcrypt.hash(otp, 10);
+
+    user.resetPasswordOtp = hashedOtp;
+    user.resetPasswordOtpExpires = new Date(now + 5 * 60 * 1000); // 5 mins
+    user.resetPasswordAttempts = 0;
+    user.resetPasswordOtpLastSentAt = new Date(now);
+    await user.save();
+
+    // Send reset email
+    try {
+      await sendPasswordResetEmail(user.email, user.name, otp);
+    } catch (mailErr) {
+      console.error('Error sending reset email:', mailErr.message);
+    }
+
+    return res.status(200).json(genericResponse);
+  } catch (error) {
+    console.error('Forgot Password Error:', error.message);
+    return res.status(500).json({ message: 'Server error processing password reset', error: error.message });
+  }
+};
+
+/**
+ * @desc    Reset password using email, OTP and new password
+ * @route   POST /api/auth/reset-password
+ * @access  Public
+ */
+export const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({ message: 'Email, reset OTP, and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'New password must be at least 6 characters' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user || !user.resetPasswordOtp || !user.resetPasswordOtpExpires) {
+      return res.status(400).json({ message: 'Invalid or expired password reset request. Please request a new code.' });
+    }
+
+    // Check maximum attempts limit (max 5)
+    if (user.resetPasswordAttempts >= 5) {
+      return res.status(400).json({
+        message: 'Too many incorrect attempts. Please request a new password reset code.',
+      });
+    }
+
+    // Check expiration (5 minutes)
+    if (new Date() > new Date(user.resetPasswordOtpExpires)) {
+      return res.status(400).json({
+        message: 'Reset code has expired. Please request a new password reset code.',
+      });
+    }
+
+    // Verify OTP using bcrypt comparison
+    const isMatch = await bcrypt.compare(otp.trim(), user.resetPasswordOtp);
+    if (!isMatch) {
+      user.resetPasswordAttempts += 1;
+      await user.save();
+      const remainingAttempts = Math.max(0, 5 - user.resetPasswordAttempts);
+      return res.status(400).json({
+        message: `Invalid reset code. ${remainingAttempts} attempt(s) remaining.`,
+      });
+    }
+
+    // Hash new password using bcryptjs
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+
+    // Invalidate reset OTP fields
+    user.resetPasswordOtp = null;
+    user.resetPasswordOtpExpires = null;
+    user.resetPasswordAttempts = 0;
+    user.resetPasswordOtpLastSentAt = null;
+
+    // Ensure account is verified if completing reset
+    if (user.isVerified === false) {
+      user.isVerified = true;
+    }
+
+    await user.save();
+
+    return res.status(200).json({
+      message: 'Password has been successfully reset! You can now log in with your new password.',
+    });
+  } catch (error) {
+    console.error('Reset Password Error:', error.message);
+    return res.status(500).json({ message: 'Server error resetting password', error: error.message });
   }
 };
 
@@ -126,25 +462,35 @@ export const loginUser = async (req, res) => {
     // Find user by email
     const user = await User.findOne({ email: email.toLowerCase().trim() });
 
-    if (user && (await bcrypt.compare(password, user.password))) {
-      return res.json({
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        bio: user.bio,
-        profileImage: user.profileImage,
-        avatar: user.profileImage,
-        location: user.location,
-        skillsToTeach: user.skillsToTeach,
-        skillsTeach: user.skillsToTeach,
-        skillsToLearn: user.skillsToLearn,
-        skillsLearn: user.skillsToLearn,
-        swapsCompleted: user.swapsCompleted,
-        token: generateToken(user._id),
-      });
-    } else {
+    if (!user || !(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
+
+    // Prevent unverified users from logging in
+    if (user.isVerified === false) {
+      return res.status(403).json({
+        message: 'Your email address is not verified. Please verify your email before logging in.',
+        isUnverified: true,
+        email: user.email,
+      });
+    }
+
+    return res.json({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      bio: user.bio,
+      profileImage: user.profileImage,
+      avatar: user.profileImage,
+      location: user.location,
+      skillsToTeach: user.skillsToTeach,
+      skillsTeach: user.skillsToTeach,
+      skillsToLearn: user.skillsToLearn,
+      skillsLearn: user.skillsToLearn,
+      swapsCompleted: user.swapsCompleted,
+      isVerified: user.isVerified,
+      token: generateToken(user._id),
+    });
   } catch (error) {
     console.error('Login Error:', error.message);
     return res.status(500).json({ message: 'Server error during login', error: error.message });
@@ -173,6 +519,7 @@ export const getUserProfile = async (req, res) => {
         skillsToLearn: user.skillsToLearn,
         skillsLearn: user.skillsToLearn,
         swapsCompleted: user.swapsCompleted,
+        isVerified: user.isVerified,
       });
     } else {
       return res.status(404).json({ message: 'User not found' });
@@ -240,6 +587,7 @@ export const updateUserProfile = async (req, res) => {
       skillsToLearn: updatedUser.skillsToLearn,
       skillsLearn: updatedUser.skillsToLearn,
       swapsCompleted: updatedUser.swapsCompleted,
+      isVerified: updatedUser.isVerified,
       token: generateToken(updatedUser._id),
     });
   } catch (error) {
@@ -262,4 +610,3 @@ export const getAllUsers = async (req, res) => {
     return res.status(500).json({ message: 'Server error fetching users', error: error.message });
   }
 };
-

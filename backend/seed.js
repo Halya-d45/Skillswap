@@ -90,8 +90,11 @@ const seedData = async () => {
     for (const u of demoUsersData) {
       let existing = await User.findOne({ email: u.email });
       if (!existing) {
-        existing = await User.create(u);
+        existing = await User.create({ ...u, isVerified: true });
         console.log(`Created user: ${existing.name} (${existing.email})`);
+      } else if (!existing.isVerified) {
+        existing.isVerified = true;
+        await existing.save();
       }
       seededUsers.push(existing);
     }

@@ -1,6 +1,11 @@
 import mongoose from 'mongoose';
 import Request from '../models/Request.js';
 import User from '../models/User.js';
+import {
+  sendExchangeRequestEmail,
+  sendRequestAcceptedEmail,
+  sendRequestRejectedEmail,
+} from '../config/email.js';
 
 /**
  * @desc    Send a new skill exchange request to another user
@@ -48,6 +53,22 @@ export const sendRequest = async (req, res) => {
     const populated = await Request.findById(request._id)
       .populate('senderId', 'name email profileImage avatar location bio')
       .populate('receiverId', 'name email profileImage avatar location bio');
+
+    // Send email notification to recipient (Student B)
+    try {
+      if (populated.receiverId?.email) {
+        await sendExchangeRequestEmail(
+          populated.receiverId.email,
+          populated.receiverId.name,
+          populated.senderId?.name || 'A fellow student',
+          populated.skillOffered,
+          populated.skillRequested,
+          populated.message
+        );
+      }
+    } catch (emailErr) {
+      console.error('Failed to dispatch exchange request email:', emailErr.message);
+    }
 
     return res.status(201).json(populated);
   } catch (error) {
@@ -127,6 +148,21 @@ export const acceptRequest = async (req, res) => {
       .populate('senderId', 'name email profileImage avatar')
       .populate('receiverId', 'name email profileImage avatar');
 
+    // Send email notification to sender (Student A) that request was accepted
+    try {
+      if (populated.senderId?.email) {
+        await sendRequestAcceptedEmail(
+          populated.senderId.email,
+          populated.senderId.name,
+          populated.receiverId?.name || 'Your exchange partner',
+          populated.skillOffered,
+          populated.skillRequested
+        );
+      }
+    } catch (emailErr) {
+      console.error('Failed to dispatch request accepted email:', emailErr.message);
+    }
+
     return res.json(populated);
   } catch (error) {
     console.error('Error accepting request:', error.message);
@@ -164,6 +200,21 @@ export const rejectRequest = async (req, res) => {
     const populated = await Request.findById(updated._id)
       .populate('senderId', 'name email profileImage avatar')
       .populate('receiverId', 'name email profileImage avatar');
+
+    // Send email notification to sender (Student A) that request was rejected
+    try {
+      if (populated.senderId?.email) {
+        await sendRequestRejectedEmail(
+          populated.senderId.email,
+          populated.senderId.name,
+          populated.receiverId?.name || 'The requested student',
+          populated.skillOffered,
+          populated.skillRequested
+        );
+      }
+    } catch (emailErr) {
+      console.error('Failed to dispatch request rejected email:', emailErr.message);
+    }
 
     return res.json(populated);
   } catch (error) {

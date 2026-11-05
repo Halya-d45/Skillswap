@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { LogIn, ArrowRight, AlertCircle } from 'lucide-react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { LogIn, ArrowRight, AlertCircle, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { authService, getErrorMessage } from '../services/api';
 import '../styles/Auth.css';
 
 function Login({ onLogin }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -12,8 +15,11 @@ function Login({ onLogin }) {
 
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [successBanner, setSuccessBanner] = useState(
+    location.state?.successMessage || ''
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const navigate = useNavigate();
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -29,6 +35,10 @@ function Login({ onLogin }) {
     }
     if (serverError) {
       setServerError('');
+      setUnverifiedEmail('');
+    }
+    if (successBanner) {
+      setSuccessBanner('');
     }
   };
 
@@ -53,6 +63,8 @@ function Login({ onLogin }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError('');
+    setUnverifiedEmail('');
+    setSuccessBanner('');
     if (!validate()) return;
 
     setIsSubmitting(true);
@@ -68,11 +80,21 @@ function Login({ onLogin }) {
       navigate('/dashboard');
     } catch (err) {
       console.error('Login Error:', err);
-      const message = getErrorMessage(
-        err,
-        'Unable to connect to server. Please check your backend is running.'
-      );
-      setServerError(message);
+
+      // Check if user is unverified (HTTP 403 with isUnverified flag)
+      if (err.response?.status === 403 && err.response?.data?.isUnverified) {
+        setUnverifiedEmail(err.response.data.email || formData.email.trim());
+        setServerError(
+          err.response.data.message ||
+            'Your email address is not verified yet. Please enter your verification code.'
+        );
+      } else {
+        const message = getErrorMessage(
+          err,
+          'Unable to connect to server. Please check your backend is running.'
+        );
+        setServerError(message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -92,20 +114,39 @@ function Login({ onLogin }) {
           </p>
         </div>
 
+        {/* Success Alert Banner (e.g. from password reset) */}
+        {successBanner && (
+          <div className="alert-banner alert-banner-success">
+            <CheckCircle2 size={18} />
+            <span>{successBanner}</span>
+          </div>
+        )}
+
         {/* Server Error Alert */}
         {serverError && (
-          <div
-            className="alert-banner alert-banner-error"
-            style={{
-              backgroundColor: '#fee2e2',
-              color: '#b91c1c',
-              border: '1px solid #f87171',
-              marginBottom: '18px',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <AlertCircle size={18} />
-              <span>{serverError}</span>
+          <div className="alert-banner alert-banner-error">
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%' }}>
+              {unverifiedEmail ? <ShieldAlert size={20} style={{ flexShrink: 0, marginTop: '2px' }} /> : <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />}
+              <div style={{ flex: 1 }}>
+                <div>{serverError}</div>
+                {unverifiedEmail && (
+                  <div style={{ marginTop: '8px' }}>
+                    <Link
+                      to="/verify-email"
+                      state={{ email: unverifiedEmail }}
+                      className="btn btn-primary"
+                      style={{
+                        display: 'inline-block',
+                        fontSize: '0.82rem',
+                        padding: '6px 12px',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      Verify Email Now →
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -132,9 +173,12 @@ function Login({ onLogin }) {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="password">
-              <span>Password</span>
-            </label>
+            <div className="form-label">
+              <label htmlFor="password">Password</label>
+              <Link to="/forgot-password" className="auth-field-action">
+                Forgot password?
+              </Link>
+            </div>
             <input
               type="password"
               id="password"

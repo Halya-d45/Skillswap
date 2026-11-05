@@ -5,6 +5,9 @@ import Footer from './components/Footer';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import VerifyOtp from './pages/VerifyOtp';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Dashboard from './pages/Dashboard';
 import ExploreSkills from './pages/ExploreSkills';
 import Profile from './pages/Profile';
@@ -127,6 +130,41 @@ function App() {
                   <Navigate to="/dashboard" replace />
                 ) : (
                   <Signup onSignup={handleSignup} />
+                )
+              }
+            />
+
+            <Route
+              path="/verify-email"
+              element={
+                currentUser ? (
+                  <Navigate to="/dashboard" replace />
+                ) : (
+                  <VerifyOtp onLogin={handleLogin} />
+                )
+              }
+            />
+
+            <Route path="/verify-otp" element={<Navigate to="/verify-email" replace />} />
+
+            <Route
+              path="/forgot-password"
+              element={
+                currentUser ? (
+                  <Navigate to="/dashboard" replace />
+                ) : (
+                  <ForgotPassword />
+                )
+              }
+            />
+
+            <Route
+              path="/reset-password"
+              element={
+                currentUser ? (
+                  <Navigate to="/dashboard" replace />
+                ) : (
+                  <ResetPassword />
                 )
               }
             />

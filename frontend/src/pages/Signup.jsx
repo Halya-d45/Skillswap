@@ -93,7 +93,7 @@ function Signup({ onSignup }) {
 
     try {
       // Connect to Express registration API: POST /api/auth/register
-      const userData = await authService.register({
+      const response = await authService.register({
         name: formData.name.trim(),
         email: formData.email.trim().toLowerCase(),
         password: formData.password,
@@ -101,8 +101,15 @@ function Signup({ onSignup }) {
         skillsToLearn: learnArray,
       });
 
-      onSignup(userData);
-      navigate('/dashboard');
+      // If registration requires email verification OTP
+      navigate('/verify-email', {
+        state: {
+          email: formData.email.trim().toLowerCase(),
+          message:
+            response.message ||
+            'Registration successful! Please check your email for the 6-digit verification code.',
+        },
+      });
     } catch (err) {
       console.error('Registration Error:', err);
       const message = getErrorMessage(

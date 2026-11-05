@@ -82,9 +82,37 @@ export const authService = {
   // Register new user: POST /api/auth/register
   register: async (userData) => {
     const response = await api.post('/auth/register', userData);
+    // Note: Registration does not issue a JWT token until email OTP verification succeeds
     if (response.data?.token) {
       localStorage.setItem('token', response.data.token);
     }
+    return response.data;
+  },
+
+  // Verify email using 6-digit OTP: POST /api/auth/verify-email
+  verifyEmail: async ({ email, otp }) => {
+    const response = await api.post('/auth/verify-email', { email, otp });
+    if (response.data?.token) {
+      localStorage.setItem('token', response.data.token);
+    }
+    return response.data;
+  },
+
+  // Resend registration verification OTP: POST /api/auth/resend-verification-otp
+  resendVerificationOtp: async ({ email }) => {
+    const response = await api.post('/auth/resend-verification-otp', { email });
+    return response.data;
+  },
+
+  // Request password reset OTP: POST /api/auth/forgot-password
+  forgotPassword: async ({ email }) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+  },
+
+  // Reset password using email, OTP, and new password: POST /api/auth/reset-password
+  resetPassword: async ({ email, otp, newPassword }) => {
+    const response = await api.post('/auth/reset-password', { email, otp, newPassword });
     return response.data;
   },
 

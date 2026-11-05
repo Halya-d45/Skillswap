@@ -50,6 +50,42 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationOtp: {
+      type: String,
+      default: null,
+    },
+    verificationOtpExpires: {
+      type: Date,
+      default: null,
+    },
+    verificationAttempts: {
+      type: Number,
+      default: 0,
+    },
+    otpLastSentAt: {
+      type: Date,
+      default: null,
+    },
+    resetPasswordOtp: {
+      type: String,
+      default: null,
+    },
+    resetPasswordOtpExpires: {
+      type: Date,
+      default: null,
+    },
+    resetPasswordAttempts: {
+      type: Number,
+      default: 0,
+    },
+    resetPasswordOtpLastSentAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
