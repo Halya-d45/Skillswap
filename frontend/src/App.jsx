@@ -136,16 +136,13 @@ function App() {
 
             <Route
               path="/verify-email"
-              element={
-                currentUser ? (
-                  <Navigate to="/dashboard" replace />
-                ) : (
-                  <VerifyOtp onLogin={handleLogin} />
-                )
-              }
+              element={<Navigate to={currentUser ? '/dashboard' : '/login'} replace />}
             />
 
-            <Route path="/verify-otp" element={<Navigate to="/verify-email" replace />} />
+            <Route
+              path="/verify-otp"
+              element={<Navigate to={currentUser ? '/dashboard' : '/login'} replace />}
+            />
 
             <Route
               path="/forgot-password"

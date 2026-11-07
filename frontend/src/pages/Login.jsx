@@ -15,7 +15,6 @@ function Login({ onLogin }) {
 
   const [errors, setErrors] = useState({});
   const [serverError, setServerError] = useState('');
-  const [unverifiedEmail, setUnverifiedEmail] = useState('');
   const [successBanner, setSuccessBanner] = useState(
     location.state?.successMessage || ''
   );
@@ -35,7 +34,6 @@ function Login({ onLogin }) {
     }
     if (serverError) {
       setServerError('');
-      setUnverifiedEmail('');
     }
     if (successBanner) {
       setSuccessBanner('');
@@ -63,7 +61,6 @@ function Login({ onLogin }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setServerError('');
-    setUnverifiedEmail('');
     setSuccessBanner('');
     if (!validate()) return;
 
@@ -80,21 +77,11 @@ function Login({ onLogin }) {
       navigate('/dashboard');
     } catch (err) {
       console.error('Login Error:', err);
-
-      // Check if user is unverified (HTTP 403 with isUnverified flag)
-      if (err.response?.status === 403 && err.response?.data?.isUnverified) {
-        setUnverifiedEmail(err.response.data.email || formData.email.trim());
-        setServerError(
-          err.response.data.message ||
-            'Your email address is not verified yet. Please enter your verification code.'
-        );
-      } else {
-        const message = getErrorMessage(
-          err,
-          'Unable to connect to server. Please check your backend is running.'
-        );
-        setServerError(message);
-      }
+      const message = getErrorMessage(
+        err,
+        'Unable to connect to server. Please check your backend is running.'
+      );
+      setServerError(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -125,28 +112,9 @@ function Login({ onLogin }) {
         {/* Server Error Alert */}
         {serverError && (
           <div className="alert-banner alert-banner-error">
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%' }}>
-              {unverifiedEmail ? <ShieldAlert size={20} style={{ flexShrink: 0, marginTop: '2px' }} /> : <AlertCircle size={18} style={{ flexShrink: 0, marginTop: '2px' }} />}
-              <div style={{ flex: 1 }}>
-                <div>{serverError}</div>
-                {unverifiedEmail && (
-                  <div style={{ marginTop: '8px' }}>
-                    <Link
-                      to="/verify-email"
-                      state={{ email: unverifiedEmail }}
-                      className="btn btn-primary"
-                      style={{
-                        display: 'inline-block',
-                        fontSize: '0.82rem',
-                        padding: '6px 12px',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      Verify Email Now →
-                    </Link>
-                  </div>
-                )}
-              </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <div>{serverError}</div>
             </div>
           </div>
         )}

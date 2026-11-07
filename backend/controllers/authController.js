@@ -63,7 +63,7 @@ export const registerUser = async (req, res) => {
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: normalizedEmail });
-    if (existingUser && existingUser.isVerified) {
+    if (existingUser) {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
@@ -89,61 +89,40 @@ export const registerUser = async (req, res) => {
           .map((s) => s.trim())
           .filter(Boolean);
 
-    // Generate 6-digit OTP & hash it before storing
-    const otp = generateSixDigitOtp();
-    const hashedOtp = await bcrypt.hash(otp, 10);
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    // Save registered user directly in MongoDB
+    const user = await User.create({
+      name: name.trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      skillsToTeach: normalizedTeach,
+      skillsToLearn: normalizedLearn,
+      bio: bio || 'Eager to exchange skills and learn with the SkillSwap community!',
+      profileImage:
+        profileImage ||
+        avatar ||
+        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
+      location: location || 'Remote',
+      isVerified: true,
+    });
 
-    let user;
+    const token = generateToken(user._id);
 
-    if (existingUser && !existingUser.isVerified) {
-      // User registered previously but hadn't verified yet — update record & send fresh OTP
-      existingUser.name = name.trim();
-      existingUser.password = hashedPassword;
-      existingUser.skillsToTeach = normalizedTeach;
-      existingUser.skillsToLearn = normalizedLearn;
-      existingUser.bio = bio || existingUser.bio;
-      existingUser.profileImage = profileImage || avatar || existingUser.profileImage;
-      existingUser.location = location || existingUser.location;
-      existingUser.verificationOtp = hashedOtp;
-      existingUser.verificationOtpExpires = otpExpires;
-      existingUser.verificationAttempts = 0;
-      existingUser.otpLastSentAt = new Date();
-      user = await existingUser.save();
-    } else {
-      // Create fresh unverified user in MongoDB
-      user = await User.create({
-        name: name.trim(),
-        email: normalizedEmail,
-        password: hashedPassword,
-        skillsToTeach: normalizedTeach,
-        skillsToLearn: normalizedLearn,
-        bio: bio || 'Eager to exchange skills and learn with the SkillSwap community!',
-        profileImage:
-          profileImage ||
-          avatar ||
-          'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200',
-        location: location || 'Remote',
-        isVerified: false,
-        verificationOtp: hashedOtp,
-        verificationOtpExpires: otpExpires,
-        verificationAttempts: 0,
-        otpLastSentAt: new Date(),
-      });
-    }
-
-    // Send verification email via Nodemailer
-    try {
-      await sendVerificationEmail(user.email, user.name, otp);
-    } catch (mailErr) {
-      console.error('Failed to dispatch verification email:', mailErr.message);
-    }
-
-    // Respond WITHOUT JWT token (user must verify email first)
     return res.status(201).json({
-      message: 'Registration initiated! Please check your email for the 6-digit verification code.',
+      _id: user._id,
+      name: user.name,
       email: user.email,
-      requiresVerification: true,
+      bio: user.bio,
+      profileImage: user.profileImage,
+      avatar: user.profileImage,
+      location: user.location,
+      skillsToTeach: user.skillsToTeach,
+      skillsTeach: user.skillsToTeach,
+      skillsToLearn: user.skillsToLearn,
+      skillsLearn: user.skillsToLearn,
+      swapsCompleted: user.swapsCompleted,
+      isVerified: user.isVerified,
+      token,
+      message: 'Registration successful! Welcome to SkillSwap.',
     });
   } catch (error) {
     console.error('Registration Error:', error.message);
@@ -291,11 +270,23 @@ export const resendVerificationOtp = async (req, res) => {
     user.otpLastSentAt = new Date(now);
     await user.save();
 
-    // Send email
+    // Send email via Resend HTTP API
+    let emailResult;
     try {
-      await sendVerificationEmail(user.email, user.name, otp);
+      emailResult = await sendVerificationEmail(user.email, user.name, otp);
     } catch (mailErr) {
       console.error('Failed to resend verification email:', mailErr.message);
+      emailResult = { success: false, error: mailErr.message };
+    }
+
+    if (!emailResult || !emailResult.success) {
+      user.otpLastSentAt = null;
+      await user.save();
+
+      return res.status(500).json({
+        message: 'Failed to resend verification email. Please try again.',
+        error: emailResult?.error || 'Email delivery failed',
+      });
     }
 
     return res.status(200).json({
@@ -325,11 +316,11 @@ export const forgotPassword = async (req, res) => {
 
     // Consistent response message to avoid account enumeration
     const genericResponse = {
-      message: 'If an account exists with that email address and is verified, a password reset code has been sent.',
+      message: 'If an account exists with that email address, a password reset code has been sent.',
     };
 
-    if (!user || user.isVerified === false) {
-      // Do not disclose whether email exists or is unverified
+    if (!user) {
+      // Do not disclose whether email exists
       return res.status(200).json(genericResponse);
     }
 
@@ -357,11 +348,23 @@ export const forgotPassword = async (req, res) => {
     user.resetPasswordOtpLastSentAt = new Date(now);
     await user.save();
 
-    // Send reset email
+    // Send reset email via Resend HTTP API
+    let emailResult;
     try {
-      await sendPasswordResetEmail(user.email, user.name, otp);
+      emailResult = await sendPasswordResetEmail(user.email, user.name, otp);
     } catch (mailErr) {
       console.error('Error sending reset email:', mailErr.message);
+      emailResult = { success: false, error: mailErr.message };
+    }
+
+    if (!emailResult || !emailResult.success) {
+      user.resetPasswordOtpLastSentAt = null;
+      await user.save();
+
+      return res.status(500).json({
+        message: 'Failed to deliver password reset email. Please try again later.',
+        error: emailResult?.error || 'Email delivery failed',
+      });
     }
 
     return res.status(200).json(genericResponse);
@@ -466,13 +469,10 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    // Prevent unverified users from logging in
+    // Ensure any previously unverified user account is verified
     if (user.isVerified === false) {
-      return res.status(403).json({
-        message: 'Your email address is not verified. Please verify your email before logging in.',
-        isUnverified: true,
-        email: user.email,
-      });
+      user.isVerified = true;
+      await user.save();
     }
 
     return res.json({

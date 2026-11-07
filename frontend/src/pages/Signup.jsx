@@ -101,15 +101,19 @@ function Signup({ onSignup }) {
         skillsToLearn: learnArray,
       });
 
-      // If registration requires email verification OTP
-      navigate('/verify-email', {
-        state: {
-          email: formData.email.trim().toLowerCase(),
-          message:
-            response.message ||
-            'Registration successful! Please check your email for the 6-digit verification code.',
-        },
-      });
+      // Log in directly if token and user data are returned, or redirect to login
+      if (response?.token) {
+        if (onSignup) {
+          onSignup(response);
+        }
+        navigate('/dashboard');
+      } else {
+        navigate('/login', {
+          state: {
+            successMessage: 'Registration successful! You can now log in.',
+          },
+        });
+      }
     } catch (err) {
       console.error('Registration Error:', err);
       const message = getErrorMessage(

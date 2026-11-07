@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,58 +9,73 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
 /**
- * Creates and returns a Nodemailer transporter instance configured for Gmail SMTP
- */
-export const createTransporter = () => {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
-
-  if (!user || !pass) {
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-      user: user.trim(),
-      pass: pass.trim(),
-    },
-  });
-};
-
-/**
- * Base reusable email sender function
+ * Base reusable email sender function using Resend HTTP API
  * @param {Object} options
  * @param {string} options.to - Recipient email
  * @param {string} options.subject - Email subject
  * @param {string} options.html - HTML body
  * @param {string} [options.text] - Plain text fallback
+ * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
  */
 export const sendEmail = async ({ to, subject, html, text }) => {
   try {
-    const transporter = createTransporter();
+    const apiKey = process.env.RESEND_API_KEY;
 
-    if (!transporter) {
+    if (!apiKey) {
       console.warn(
-        `⚠️ [SkillSwap Email] EMAIL_USER or EMAIL_PASS is not configured in backend/.env. Simulated sending to: ${to} | Subject: "${subject}"`
+        `⚠️ [SkillSwap Email] RESEND_API_KEY is not configured in environment variables. Email to: ${to} | Subject: "${subject}" was not sent.`
       );
-      return { success: false, notConfigured: true };
+      return {
+        success: false,
+        error: 'RESEND_API_KEY is not configured',
+      };
     }
 
-    const mailOptions = {
-      from: `"SkillSwap Platform" <${process.env.EMAIL_USER}>`,
+    const resend = new Resend(apiKey);
+    const from = process.env.RESEND_FROM_EMAIL || 'SkillSwap <onboarding@resend.dev>';
+
+    const emailPayload = {
+      from,
       to,
       subject,
-      text: text || html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
       html,
     };
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`📧 [SkillSwap Email] Sent successfully to ${to} (Message ID: ${info.messageId})`);
-    return { success: true, messageId: info.messageId };
+    if (text) {
+      emailPayload.text = text;
+    } else if (html) {
+      emailPayload.text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    const { data, error } = await resend.emails.send(emailPayload);
+
+    if (error) {
+      console.error(`❌ [SkillSwap Email] Resend delivery error for ${to}:`, error.message || error);
+      return {
+        success: false,
+        error: error.message || 'Failed to send email via Resend',
+      };
+    }
+
+    if (!data || !data.id) {
+      console.error(`❌ [SkillSwap Email] No message ID returned from Resend for ${to}`);
+      return {
+        success: false,
+        error: 'No message ID received from Resend response',
+      };
+    }
+
+    console.log(`📧 [SkillSwap Email] Sent successfully via Resend to ${to} (Message ID: ${data.id})`);
+    return {
+      success: true,
+      messageId: data.id,
+    };
   } catch (error) {
-    console.error(`❌ [SkillSwap Email] Error delivering email to ${to}:`, error.message);
-    return { success: false, error: error.message };
+    console.error(`❌ [SkillSwap Email] Exception delivering email to ${to}:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+    };
   }
 };
 
